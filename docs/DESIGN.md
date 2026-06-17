@@ -58,6 +58,11 @@ C:\Bounties
 2. Compact fallback prompt.
 3. `StubBountyAIService` — always produces a result.
 
+## v0.1.0 TestFlight Stubs
+
+- **Apple Pay:** `PKPaymentAuthorizationController` is stubbed — the funding screen shows "Fund Bounty (Coming Soon)" and simulates immediate success. This avoids needing a merchant ID entitlement (`merchant.com.zrottmann.bounties`) in the provisioning profile. Re-enable by: registering the merchant ID in the Apple Developer portal, adding `com.apple.developer.in-app-payments` entitlement with that merchant ID to the App ID, regenerating the profile, and restoring the real `ApplePayButton` implementation with `import PassKit`.
+- **FoundationModels AI:** `makeBountyAIService()` returns `StubBountyAIService` which gives a deterministic 3-step breakdown. The real on-device AI path using `LanguageModelSession` is the v0.2.0 increment.
+
 ## Next Increments (prioritised)
 
 1. **GitHub repo + CI:** `git remote add origin`, create repo, wire Codemagic xtool pipeline (copy from Stash/Cardly). Upload IPA to TestFlight.
