@@ -270,13 +270,6 @@ private struct ApplePayButton: UIViewRepresentable {
             parent.onSuccess(nil)
         }
 
-        // Placeholder so the reference below compiles when Apple Pay is re-enabled
-        func _unused() {
-
-        func paymentAuthorizationController(_ controller: PKPaymentAuthorizationController,
-                                            didAuthorizePayment payment: PKPayment,
-            _ = parent  // suppress unused warning in stub
-        }
     }
 }
 #endif
