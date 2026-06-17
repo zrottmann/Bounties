@@ -81,12 +81,21 @@ workflows:
           echo "Project: $PROJ / Scheme: $SCHEME"
 
           ARCHIVE="$PWD/build/app.xcarchive"
+          mkdir -p /tmp/xcodebuild_logs
           xcodebuild archive \
             -project "$PROJ" -scheme "$SCHEME" -configuration Release \
             -archivePath "$ARCHIVE" \
             -destination 'generic/platform=iOS' \
             SWIFT_VERSION=5.0 \
-            CODE_SIGN_STYLE=Manual
+            CODE_SIGN_STYLE=Manual \
+            2>&1 | tee /tmp/xcodebuild_logs/archive.log
+          ARCHIVE_RC=${PIPESTATUS[0]}
+          if [ $ARCHIVE_RC -ne 0 ]; then
+            echo "=== LAST 100 LINES OF ARCHIVE LOG ==="
+            tail -100 /tmp/xcodebuild_logs/archive.log
+            echo "=== xcodebuild archive failed RC=$ARCHIVE_RC ==="
+            exit $ARCHIVE_RC
+          fi
 
           APPDIR=$(find "$ARCHIVE/Products/Applications" -maxdepth 1 -name "*.app" -type d | head -1)
           [ -n "$APPDIR" ] || { echo "no .app in archive"; exit 1; }
