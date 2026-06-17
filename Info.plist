@@ -26,6 +26,8 @@
     <string>Bounties needs access to your photos so you can attach a picture of the job and upload evidence when a step is complete.</string>
     <key>NSCameraUsageDescription</key>
     <string>Bounties uses your camera so you can take a photo of the job or capture evidence when completing a step.</string>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
     <key>CFBundleIcons</key>
     <dict>
         <key>CFBundlePrimaryIcon</key>

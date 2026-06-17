@@ -1,0 +1,201 @@
+# Codemagic CI/CD — Bounties (xtool SwiftUI)
+#
+# Workflow:
+#   ios-appstore   SIGNED App Store + TestFlight build.
+#                  Ported verbatim from the proven aiMandarin / ElectricianForge
+#                  recipe: xtool generate-xcode-project → xcodebuild archive
+#                  (manual signing) → inject icons → export signed IPA → publish.
+#
+# NOTE v0.1.0: Apple Pay (PassKit) is intentionally stubbed — no merchant ID
+# entitlement required. The funding screen shows "Coming Soon". See DESIGN.md.
+
+workflows:
+  ios-appstore:
+    name: Bounties App Store + TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    cache:
+      cache_paths:
+        - ~/Library/Caches/org.swift.swiftpm
+        - ~/Library/org.swift.swiftpm
+        - ~/Library/Developer/Xcode/DerivedData
+        - ~/Library/Caches/Homebrew
+        - $HOME/.cache/xtool
+        - .build
+    environment:
+      xcode: 26.5
+      groups:
+        - appstore   # CM_CERTIFICATE (.p12 b64) + CM_CERTIFICATE_PASSWORD +
+                     # APP_STORE_CONNECT_* (declarative ASC API key)
+      vars:
+        BUNDLE_ID: com.zrottmann.bounties
+    scripts:
+      - name: Show toolchain
+        script: |
+          xcodebuild -version
+          echo "iOS SDK: $(xcrun -sdk iphoneos --show-sdk-version)"
+      - name: Run BountiesKit unit tests
+        script: |
+          set -x
+          SCHEME=$(xcodebuild -list 2>/dev/null | awk '/Schemes:/{f=1;next} f && NF{gsub(/^[[:space:]]+/,"");print; exit}')
+          [ -z "$SCHEME" ] && SCHEME=Bounties
+          echo "Test scheme: $SCHEME"
+          DEST=$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/{print $2; exit}')
+          echo "Simulator UDID: $DEST"
+          if [ -z "$DEST" ]; then
+            echo "No iOS Simulator available; skipping tests"
+            exit 0
+          fi
+          xcodebuild test \
+            -scheme "$SCHEME" \
+            -destination "id=$DEST" \
+            SWIFT_VERSION=5.0 \
+            | tee xcodebuild-test.log | grep -E "Test (Suite|Case)|error:|TEST" || true
+          if grep -qE "\*\* TEST FAILED \*\*" xcodebuild-test.log; then
+            echo "Unit tests failed"; exit 1
+          fi
+          grep -qE "\*\* TEST SUCCEEDED \*\*" xcodebuild-test.log || { echo "tests did not run to success"; exit 1; }
+      - name: Install xtool
+        script: brew install xtool-org/tap/xtool
+      - name: Generate Xcode project
+        script: |
+          xtool dev generate-xcode-project
+          ls -la
+      - name: Fetch-or-create signing files
+        script: |
+          set -euo pipefail
+          keychain initialize
+          echo "$CM_CERTIFICATE" | base64 --decode > /tmp/dist.p12
+          keychain add-certificates \
+            --certificate /tmp/dist.p12 \
+            --certificate-password="$CM_CERTIFICATE_PASSWORD"
+          openssl pkcs12 -in /tmp/dist.p12 -nocerts -nodes \
+            -passin pass:"$CM_CERTIFICATE_PASSWORD" \
+            | sed -n '/-----BEGIN/,/-----END/p' > /tmp/dist_cert_key.pem
+          head -1 /tmp/dist_cert_key.pem
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --strict-match-identifier \
+            --certificate-key=@file:/tmp/dist_cert_key.pem \
+            --create
+          xcode-project use-profiles
+      - name: Resolve scheme, archive, inject icons, export signed IPA
+        script: |
+          set -euxo pipefail
+          PROJ=$(find . -name "*.xcodeproj" -not -path "*/.build/*" | head -1)
+          [ -n "$PROJ" ] || { echo "no xcodeproj"; exit 1; }
+          SCHEMES=$(xcodebuild -project "$PROJ" -list | awk '/Schemes:/{f=1;next} f && NF{gsub(/^[[:space:]]+/,"");print}')
+          SCHEME=$(echo "$SCHEMES" | grep -iE -- '-App$|App$' | grep -iv 'Tests' | head -1)
+          [ -z "$SCHEME" ] && SCHEME=$(echo "$SCHEMES" | grep -iv 'Tests' | head -1)
+          echo "Project: $PROJ / Scheme: $SCHEME"
+
+          ARCHIVE="$PWD/build/app.xcarchive"
+          xcodebuild archive \
+            -project "$PROJ" -scheme "$SCHEME" -configuration Release \
+            -archivePath "$ARCHIVE" \
+            -destination 'generic/platform=iOS' \
+            SWIFT_VERSION=5.0 \
+            CODE_SIGN_STYLE=Manual
+
+          APPDIR=$(find "$ARCHIVE/Products/Applications" -maxdepth 1 -name "*.app" -type d | head -1)
+          [ -n "$APPDIR" ] || { echo "no .app in archive"; exit 1; }
+
+          # Compile Assets.xcassets → Assets.car (includes 1024 marketing icon).
+          SDKV=$(xcrun -sdk iphoneos --show-sdk-version)
+          rm -rf /tmp/ac && mkdir -p /tmp/ac
+          actool Assets.xcassets \
+            --compile /tmp/ac \
+            --platform iphoneos \
+            --minimum-deployment-target 17.0 \
+            --target-device iphone --target-device ipad \
+            --app-icon AppIcon \
+            --output-partial-info-plist /tmp/ac/partial.plist \
+            --output-format human-readable-text
+          cp -v /tmp/ac/Assets.car "$APPDIR/Assets.car"
+          find /tmp/ac -maxdepth 1 -name "*.png" -exec cp -v {} "$APPDIR/" \;
+          PB=/usr/libexec/PlistBuddy
+          for KEY in CFBundleIcons "CFBundleIcons~ipad" CFBundleIconName CFBundleIconFiles; do
+            $PB -c "Delete :$KEY" "$APPDIR/Info.plist" 2>/dev/null || true
+          done
+          plutil -convert xml1 /tmp/ac/partial.plist
+          $PB -c "Merge /tmp/ac/partial.plist" "$APPDIR/Info.plist"
+
+          # Belt-and-suspenders loose icons (prevents blank home screen on @3x iPhones).
+          sips -z 120 120 icon_1024.png --out "$APPDIR/AppIcon60x60@2x.png"
+          sips -z 180 180 icon_1024.png --out "$APPDIR/AppIcon60x60@3x.png"
+          sips -z 152 152 icon_1024.png --out "$APPDIR/AppIcon76x76@2x~ipad.png"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles" \
+            "$APPDIR/Info.plist" >/dev/null 2>&1 || \
+          /usr/libexec/PlistBuddy \
+            -c "Add :CFBundleIcons dict" \
+            -c "Add :CFBundleIcons:CFBundlePrimaryIcon dict" \
+            -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles array" \
+            -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles:0 string AppIcon60x60" \
+            -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName string AppIcon" \
+            "$APPDIR/Info.plist"
+          [ -f "$APPDIR/AppIcon60x60@2x.png" ] && [ -f "$APPDIR/AppIcon60x60@3x.png" ] || {
+            echo "FATAL: AppIcon60x60 PNGs missing"; exit 1; }
+          for I in "$APPDIR/AppIcon60x60@2x.png" "$APPDIR/AppIcon60x60@3x.png"; do
+            HASALPHA=$(sips -g hasAlpha "$I" 2>/dev/null | awk '/hasAlpha/{print $2}')
+            [ "$HASALPHA" = "no" ] || { echo "FATAL: $I has alpha channel"; exit 1; }
+          done
+
+          # Export signed IPA.
+          PROFILE=$(find "$HOME/Library" \( -name "*.mobileprovision" -o -name "*.provisionprofile" \) 2>/dev/null | head -1)
+          [ -n "$PROFILE" ] || { echo "no provisioning profile found"; exit 1; }
+          security cms -D -i "$PROFILE" > /tmp/profile.plist
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" /tmp/profile.plist)
+          echo "Export profile: $PROFILE_NAME"
+          mkdir -p build/ios/ipa
+          plutil -create xml1 /tmp/exportOptions.plist
+          /usr/libexec/PlistBuddy \
+            -c "Add :method string app-store" \
+            -c "Add :signingStyle string manual" \
+            -c "Add :provisioningProfiles dict" \
+            -c "Add :provisioningProfiles:$BUNDLE_ID string $PROFILE_NAME" \
+            /tmp/exportOptions.plist
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE" \
+            -exportPath build/ios/ipa \
+            -exportOptionsPlist /tmp/exportOptions.plist \
+            -allowProvisioningUpdates
+          ls -la build/ios/ipa/
+
+          # Re-seal CFBundleIconName in the exported IPA (xcodebuild -exportArchive strips it).
+          IPA=$(ls build/ios/ipa/*.ipa | head -1)
+          [ -n "$IPA" ] || { echo "FATAL: no IPA produced"; exit 1; }
+          rm -rf /tmp/seal && mkdir -p /tmp/seal
+          unzip -q -o "$IPA" -d /tmp/seal
+          SAPP=$(find /tmp/seal/Payload -maxdepth 1 -name "*.app" | head -1)
+          /usr/libexec/PlistBuddy -c "Add :CFBundleIconName string AppIcon" "$SAPP/Info.plist" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Set :CFBundleIconName AppIcon" "$SAPP/Info.plist"
+          SIGNID=$(security find-identity -v -p codesigning | awk '/Apple Distribution|iPhone Distribution/{print $2; exit}')
+          [ -n "$SIGNID" ] || SIGNID=$(security find-identity -v -p codesigning | awk 'NR==1{print $2}')
+          security cms -D -i "$PROFILE" > /tmp/seal_profile.plist
+          /usr/libexec/PlistBuddy -x -c "Print :Entitlements" /tmp/seal_profile.plist > /tmp/seal_ent.plist 2>/dev/null || true
+          if [ -s /tmp/seal_ent.plist ]; then
+            codesign --force --sign "$SIGNID" --entitlements /tmp/seal_ent.plist "$SAPP"
+          else
+            codesign --force --sign "$SIGNID" "$SAPP"
+          fi
+          ( cd /tmp/seal && zip -qry /tmp/seal_out.ipa Payload )
+          cp -v /tmp/seal_out.ipa "$IPA"
+
+          # Verify.
+          rm -rf /tmp/verify && mkdir -p /tmp/verify
+          unzip -q -o "$IPA" -d /tmp/verify
+          VAPP=$(find /tmp/verify/Payload -maxdepth 1 -name "*.app" | head -1)
+          ICONNAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIconName" "$VAPP/Info.plist" 2>/dev/null || true)
+          [ "$ICONNAME" = "AppIcon" ] || { echo "FATAL: top-level CFBundleIconName != AppIcon"; exit 1; }
+          [ -f "$VAPP/Assets.car" ] || { echo "FATAL: Assets.car missing"; exit 1; }
+          codesign --verify --deep --strict "$VAPP" && echo "codesign OK"
+          echo "BUILD COMPLETE"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        submit_to_testflight: true

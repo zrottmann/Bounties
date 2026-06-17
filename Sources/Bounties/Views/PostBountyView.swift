@@ -1,7 +1,13 @@
 #if os(iOS)
 import SwiftUI
-import PassKit
 import BountiesKit
+// NOTE: Apple Pay (PassKit) is stubbed for this first TestFlight build.
+// The PKPaymentAuthorizationController integration requires an Apple Pay
+// merchant ID entitlement in the provisioning profile. To keep signing simple
+// for TestFlight v0.1.0, the funding screen shows "Coming Soon" instead of
+// launching the real payment sheet. See DESIGN.md § Next Increments.
+// Re-enable by: adding merchant.com.zrottmann.bounties to the App ID,
+// generating a new profile, importing PassKit, and restoring ApplePayButton.
 
 struct PostBountyView: View {
     @State var vm: PostBountyViewModel
@@ -130,8 +136,10 @@ private struct BreakdownReview: View {
             }
 
             Section {
-                Button("Fund Bounty with Apple Pay") {
-                    vm.beginFunding()
+                // v0.1.0: Apple Pay is coming — tapping "Fund" simulates payment
+                // so the holder flow is exercisable end-to-end in TestFlight.
+                Button("Fund Bounty (Coming Soon)") {
+                    Task { await vm.fundingSucceeded(paymentToken: nil) }
                 }
                 .buttonStyle(.borderedProminent)
                 .frame(maxWidth: .infinity)
@@ -144,31 +152,20 @@ private struct BreakdownReview: View {
     }
 }
 
-// MARK: - Apple Pay funding screen
+// MARK: - Funding view (stub — Apple Pay wired in next increment)
 
 private struct FundingView: View {
     @State var vm: PostBountyViewModel
 
     var body: some View {
         VStack(spacing: 24) {
-            Text("Funding bounty…")
-                .font(.headline)
-
-            // Real PKPaymentAuthorizationController is presented here.
-            // The button triggers the system sheet; on success `fundingSucceeded`
-            // is called with the payment token.
-            ApplePayButton(totalCents: vm.priceCents,
-                           onSuccess: { token in
-                               Task { await vm.fundingSucceeded(paymentToken: token) }
-                           },
-                           onCancel: { vm.fundingCancelled() })
-                .frame(height: 50)
-                .padding(.horizontal)
-
-            Button("Cancel") { vm.fundingCancelled() }
-                .foregroundColor(.secondary)
+            ProgressView("Posting bounty…")
         }
-        .navigationTitle("Apple Pay")
+        .navigationTitle("Funding")
+        .task {
+            // Stub: immediately succeed so the holder flow works in TestFlight.
+            await vm.fundingSucceeded(paymentToken: nil)
+        }
     }
 }
 
@@ -238,7 +235,9 @@ private struct PhotoPickerView: UIViewControllerRepresentable {
     }
 }
 
-// MARK: - Apple Pay button wrapper
+// MARK: - Apple Pay button wrapper (STUB for v0.1.0 TestFlight)
+// Real PKPaymentAuthorizationController implementation is the next increment.
+// Stubbed here so signing succeeds without an Apple Pay merchant entitlement.
 
 private struct ApplePayButton: UIViewRepresentable {
     let totalCents: Int
@@ -247,50 +246,36 @@ private struct ApplePayButton: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    func makeUIView(context: Context) -> PKPaymentButton {
-        PKPaymentButton(paymentButtonType: .buy, paymentButtonStyle: .black)
+    func makeUIView(context: Context) -> UIButton {
+        let btn = UIButton(type: .system)
+        btn.setTitle("Fund Bounty (Coming Soon)", for: .normal)
+        btn.backgroundColor = .systemGreen
+        btn.setTitleColor(.white, for: .normal)
+        btn.layer.cornerRadius = 10
+        return btn
     }
 
-    func updateUIView(_ uiView: PKPaymentButton, context: Context) {
+    func updateUIView(_ uiView: UIButton, context: Context) {
         uiView.removeTarget(nil, action: nil, for: .allEvents)
         uiView.addTarget(context.coordinator, action: #selector(Coordinator.tap), for: .touchUpInside)
     }
 
-    final class Coordinator: NSObject, PKPaymentAuthorizationControllerDelegate {
+    final class Coordinator: NSObject {
         let parent: ApplePayButton
-        var controller: PKPaymentAuthorizationController?
-
         init(_ parent: ApplePayButton) { self.parent = parent }
 
         @objc func tap() {
-            let request = PKPaymentRequest()
-            request.merchantIdentifier = "merchant.com.zrottmann.bounties"
-            request.supportedNetworks = [.visa, .masterCard, .amex]
-            request.merchantCapabilities = .threeDSecure
-            request.countryCode = "US"
-            request.currencyCode = "USD"
-            let dollars = Double(parent.totalCents) / 100.0
-            request.paymentSummaryItems = [
-                PKPaymentSummaryItem(label: "Bounty", amount: NSDecimalNumber(value: dollars))
-            ]
-            controller = PKPaymentAuthorizationController(paymentRequest: request)
-            controller?.delegate = self
-            controller?.present()
+            // Stub: simulate immediate payment success so the holder flow
+            // is exercisable in TestFlight without the merchant entitlement.
+            parent.onSuccess(nil)
         }
 
-        // MARK: PKPaymentAuthorizationControllerDelegate
+        // Placeholder so the reference below compiles when Apple Pay is re-enabled
+        func _unused() {
 
         func paymentAuthorizationController(_ controller: PKPaymentAuthorizationController,
                                             didAuthorizePayment payment: PKPayment,
-                                            handler completion: @escaping (PKPaymentAuthorizationResult) -> Void) {
-            completion(PKPaymentAuthorizationResult(status: .success, errors: nil))
-            parent.onSuccess(payment.token.paymentData)
-        }
-
-        func paymentAuthorizationControllerDidFinish(_ controller: PKPaymentAuthorizationController) {
-            controller.dismiss()
-            // If onSuccess was never called the user cancelled.
-            parent.onCancel()
+            _ = parent  // suppress unused warning in stub
         }
     }
 }
