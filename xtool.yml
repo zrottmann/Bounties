@@ -1,0 +1,4 @@
+version: 1
+bundleID: com.zrottmann.bounties
+infoPath: Info.plist
+iconPath: icon_1024.png
