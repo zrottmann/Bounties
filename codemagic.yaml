@@ -36,25 +36,16 @@ workflows:
           echo "iOS SDK: $(xcrun -sdk iphoneos --show-sdk-version)"
       - name: Run BountiesKit unit tests
         script: |
+          # BountiesKit is a pure SwiftPM library target with no iOS-only APIs.
+          # Run its tests via `swift test` on the macOS host — no simulator needed.
+          # The `Bounties` app target (#if os(iOS)) is excluded automatically.
           set -x
-          SCHEME=$(xcodebuild -list 2>/dev/null | awk '/Schemes:/{f=1;next} f && NF{gsub(/^[[:space:]]+/,"");print; exit}')
-          [ -z "$SCHEME" ] && SCHEME=Bounties
-          echo "Test scheme: $SCHEME"
-          DEST=$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/{print $2; exit}')
-          echo "Simulator UDID: $DEST"
-          if [ -z "$DEST" ]; then
-            echo "No iOS Simulator available; skipping tests"
-            exit 0
-          fi
-          xcodebuild test \
-            -scheme "$SCHEME" \
-            -destination "id=$DEST" \
-            SWIFT_VERSION=5.0 \
-            | tee xcodebuild-test.log | grep -E "Test (Suite|Case)|error:|TEST" || true
-          if grep -qE "\*\* TEST FAILED \*\*" xcodebuild-test.log; then
-            echo "Unit tests failed"; exit 1
-          fi
-          grep -qE "\*\* TEST SUCCEEDED \*\*" xcodebuild-test.log || { echo "tests did not run to success"; exit 1; }
+          swift test --filter BountiesKitTests 2>&1 | tee swift-test.log || {
+            # Re-show full output on failure so the CI log captures it.
+            cat swift-test.log
+            exit 1
+          }
+          echo "BountiesKit tests passed"
       - name: Install xtool
         script: brew install xtool-org/tap/xtool
       - name: Generate Xcode project
