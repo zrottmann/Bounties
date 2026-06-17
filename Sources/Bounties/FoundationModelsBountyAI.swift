@@ -37,15 +37,20 @@ struct AIBreakdown: Sendable {
 @available(iOS 26, *)
 struct FoundationModelsBountyAI: BountyAIService {
     func breakdown(description: String, photoContext: String?) async -> BountyBreakdown {
+        let stub = StubBountyAIService()
         // Gate: model available?
         guard case .available = SystemLanguageModel.default.availability else {
-            return StubBountyAIService().breakdown(description: description, photoContext: photoContext) as! BountyBreakdown
-            // ^ actor-isolated async call; use await properly below
+            return await stub.breakdown(description: description, photoContext: photoContext)
         }
-        // Try full model, then compact, then stub.
-        return await attempt(description: description, compact: false)
-            ?? (await attempt(description: description, compact: true))
-            ?? (await StubBountyAIService().breakdown(description: description, photoContext: photoContext))
+        // Try full model, then compact fallback, then the deterministic stub.
+        // This mirrors AiHandy's resilient pattern — never dead-ends.
+        if let result = await attempt(description: description, compact: false) {
+            return result
+        }
+        if let result = await attempt(description: description, compact: true) {
+            return result
+        }
+        return await stub.breakdown(description: description, photoContext: photoContext)
     }
 
     private func attempt(description: String, compact: Bool) async -> BountyBreakdown? {
