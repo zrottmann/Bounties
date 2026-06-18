@@ -1,13 +1,10 @@
 #if os(iOS)
 import SwiftUI
 import BountiesKit
-// NOTE: Apple Pay (PassKit) is stubbed for this first TestFlight build.
-// The PKPaymentAuthorizationController integration requires an Apple Pay
-// merchant ID entitlement in the provisioning profile. To keep signing simple
-// for TestFlight v0.1.0, the funding screen shows "Coming Soon" instead of
-// launching the real payment sheet. See DESIGN.md § Next Increments.
-// Re-enable by: adding merchant.com.zrottmann.bounties to the App ID,
-// generating a new profile, importing PassKit, and restoring ApplePayButton.
+// Apple Pay is wired via ApplePayFunding.swift (PassKit). The entitlement
+// merchant.com.zrottmann.bounties is provisioned on the App ID. When Apple Pay
+// is unavailable on a given device/simulator, presentApplePay immediately calls
+// onCancel and the VM falls back to simulated funding (no charge).
 
 struct PostBountyView: View {
     @State var vm: PostBountyViewModel
@@ -136,13 +133,7 @@ private struct BreakdownReview: View {
             }
 
             Section {
-                // v0.1.0: Apple Pay is coming — tapping "Fund" simulates payment
-                // so the holder flow is exercisable end-to-end in TestFlight.
-                Button("Fund Bounty (Coming Soon)") {
-                    Task { await vm.fundingSucceeded(paymentToken: nil) }
-                }
-                .buttonStyle(.borderedProminent)
-                .frame(maxWidth: .infinity)
+                ApplePayFundButton(vm: vm)
                 Button("Edit") { vm.reset() }
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity)
@@ -152,7 +143,49 @@ private struct BreakdownReview: View {
     }
 }
 
-// MARK: - Funding view (stub — Apple Pay wired in next increment)
+// MARK: - Apple Pay fund button
+// Presents the real Apple Pay sheet when available; falls back to simulated
+// funding (no charge) on devices / simulators where Apple Pay can't run.
+
+private struct ApplePayFundButton: View {
+    @State var vm: PostBountyViewModel
+
+    var body: some View {
+        Button(action: fund) {
+            Label(
+                applePayAvailable() ? "Pay with Apple Pay" : "Fund Bounty (Simulated)",
+                systemImage: applePayAvailable() ? "apple.logo" : "checkmark.circle"
+            )
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(applePayAvailable() ? .black : .green)
+    }
+
+    private func fund() {
+        vm.beginFunding()
+        if applePayAvailable() {
+            Task {
+                await MainActor.run {
+                    presentApplePay(
+                        amountCents: vm.priceCents,
+                        onToken: { token in
+                            Task { await vm.fundingSucceeded(applePayToken: token) }
+                        },
+                        onCancel: {
+                            vm.fundingCancelled()
+                        }
+                    )
+                }
+            }
+        } else {
+            // Apple Pay unavailable — simulate immediately (demo/TestFlight safe).
+            Task { await vm.fundingSucceeded(applePayToken: nil) }
+        }
+    }
+}
+
+// MARK: - Funding view (in-flight progress)
 
 private struct FundingView: View {
     @State var vm: PostBountyViewModel
@@ -162,10 +195,6 @@ private struct FundingView: View {
             ProgressView("Posting bounty…")
         }
         .navigationTitle("Funding")
-        .task {
-            // Stub: immediately succeed so the holder flow works in TestFlight.
-            await vm.fundingSucceeded(paymentToken: nil)
-        }
     }
 }
 
@@ -235,41 +264,4 @@ private struct PhotoPickerView: UIViewControllerRepresentable {
     }
 }
 
-// MARK: - Apple Pay button wrapper (STUB for v0.1.0 TestFlight)
-// Real PKPaymentAuthorizationController implementation is the next increment.
-// Stubbed here so signing succeeds without an Apple Pay merchant entitlement.
-
-private struct ApplePayButton: UIViewRepresentable {
-    let totalCents: Int
-    let onSuccess: (Data?) -> Void
-    let onCancel: () -> Void
-
-    func makeCoordinator() -> Coordinator { Coordinator(self) }
-
-    func makeUIView(context: Context) -> UIButton {
-        let btn = UIButton(type: .system)
-        btn.setTitle("Fund Bounty (Coming Soon)", for: .normal)
-        btn.backgroundColor = .systemGreen
-        btn.setTitleColor(.white, for: .normal)
-        btn.layer.cornerRadius = 10
-        return btn
-    }
-
-    func updateUIView(_ uiView: UIButton, context: Context) {
-        uiView.removeTarget(nil, action: nil, for: .allEvents)
-        uiView.addTarget(context.coordinator, action: #selector(Coordinator.tap), for: .touchUpInside)
-    }
-
-    final class Coordinator: NSObject {
-        let parent: ApplePayButton
-        init(_ parent: ApplePayButton) { self.parent = parent }
-
-        @objc func tap() {
-            // Stub: simulate immediate payment success so the holder flow
-            // is exercisable in TestFlight without the merchant entitlement.
-            parent.onSuccess(nil)
-        }
-
-    }
-}
 #endif

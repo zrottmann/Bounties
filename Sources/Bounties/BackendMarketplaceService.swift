@@ -142,6 +142,20 @@ actor BackendMarketplaceService: MarketplaceService {
         return d
     }
 
+    // MARK: - Funding (Apple Pay → Stripe or simulated)
+
+    /// POST /fund — sends the Apple Pay token (base64) and amount to the backend.
+    /// When `applePayToken` is nil, the backend falls back to simulated funding.
+    func fund(bountyID: String, amountCents: Int, applePayToken: String?) async throws {
+        var body: [String: Any] = [
+            "accountId": accountID,
+            "bountyId": bountyID,
+            "amountCents": amountCents
+        ]
+        if let token = applePayToken { body["applePayToken"] = token }
+        _ = try await call(path: "/fund", bodyFields: body)
+    }
+
     func resolveDispute(disputeID: String, resolution: String, accountID: String) async throws -> BountyDispute {
         let resp = try await call(path: "/dispute", bodyFields: [
             "accountId": accountID,

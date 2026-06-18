@@ -74,9 +74,10 @@ final class PostBountyViewModel {
         phase = .funding
     }
 
-    /// Called by the View when Apple Pay succeeds (paymentToken is the PKPayment token
-    /// data — stored for the future backend; ignored in stub mode).
-    func fundingSucceeded(paymentToken: Data?) async {
+    /// Called by the View when Apple Pay succeeds (or is unavailable / simulated).
+    /// `applePayToken` is the base64 PKPaymentToken.paymentData from the sheet,
+    /// or nil when Apple Pay is unavailable and we fall back to simulated funding.
+    func fundingSucceeded(applePayToken: String?) async {
         guard let bd = breakdown else { return }
         // Pass photo as base64 so the backend can upload it to Appwrite Storage.
         let photoB64 = photoData.map { $0.base64EncodedString() }
@@ -84,7 +85,19 @@ final class PostBountyViewModel {
                             photoReference: photoB64, steps: bd.steps)
         bounty.summary = bd.summary
         do {
-            postedBounty = try await marketplace.postBounty(bounty)
+            // 1. Post the bounty (creates it open/funded in state).
+            let posted = try await marketplace.postBounty(bounty)
+            // 2. If the marketplace is live and we have a server ID, call /fund.
+            if marketplace.isLive, let sid = posted.serverID {
+                if let live = marketplace as? BackendMarketplaceService {
+                    try await live.fund(
+                        bountyID: sid,
+                        amountCents: priceCents,
+                        applePayToken: applePayToken
+                    )
+                }
+            }
+            postedBounty = posted
             phase = .posted
         } catch {
             errorMessage = error.localizedDescription
