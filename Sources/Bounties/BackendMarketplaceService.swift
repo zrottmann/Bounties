@@ -185,7 +185,20 @@ actor BackendMarketplaceService: MarketplaceService {
         let outer: [String: Any] = ["path": path, "method": method, "body": innerBody]
         req.httpBody = try? JSONSerialization.data(withJSONObject: outer)
 
-        let (data, _) = try await URLSession.shared.data(for: req)
+        let data: Data
+        do {
+            (data, _) = try await URLSession.shared.data(for: req)
+        } catch let urlErr as URLError {
+            // No network, DNS failure, timeout → friendly busy.
+            switch urlErr.code {
+            case .notConnectedToInternet, .networkConnectionLost, .timedOut,
+                 .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed:
+                throw MarketplaceError.serviceUnavailable(retryAfterHours: 24)
+            default:
+                throw MarketplaceError.serviceUnavailable(retryAfterHours: 24)
+            }
+        }
+
         guard let execution = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let responseBody = execution["responseBody"] as? String,
               let bodyData = responseBody.data(using: .utf8),
@@ -193,6 +206,21 @@ actor BackendMarketplaceService: MarketplaceService {
             throw URLError(.badServerResponse)
         }
         let statusCode = execution["responseStatusCode"] as? Int ?? 200
+
+        // Detect busy signal from backend ({busy:true} at any 5xx/503 or explicit 503).
+        if statusCode == 503 || statusCode == 429 {
+            let hours = parsed["retryAfterHours"] as? Int ?? 24
+            throw MarketplaceError.serviceUnavailable(retryAfterHours: hours)
+        }
+        if let busy = parsed["busy"] as? Bool, busy {
+            let hours = parsed["retryAfterHours"] as? Int ?? 24
+            throw MarketplaceError.serviceUnavailable(retryAfterHours: hours)
+        }
+        // General 5xx → busy.
+        if statusCode >= 500 {
+            throw MarketplaceError.serviceUnavailable(retryAfterHours: 24)
+        }
+
         guard statusCode < 400 else {
             let detail = parsed["error"] as? String ?? parsed["message"] as? String ?? "HTTP \(statusCode)"
             throw MarketplaceError.serverError(detail)

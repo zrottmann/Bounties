@@ -127,13 +127,25 @@ public enum MarketplaceError: LocalizedError {
     case stepNotFound
     case alreadyAccepted
     case backendError(String)
+    /// Service is overloaded or under maintenance — show the friendly demand banner.
+    case serviceUnavailable(retryAfterHours: Int)
 
     public var errorDescription: String? {
         switch self {
-        case .notFound:             return "Bounty not found."
-        case .stepNotFound:         return "Step not found on that bounty."
-        case .alreadyAccepted:      return "Bounty has already been accepted."
-        case .backendError(let m):  return "Backend error: \(m)"
+        case .notFound:                 return "Bounty not found."
+        case .stepNotFound:             return "Step not found on that bounty."
+        case .alreadyAccepted:          return "Bounty has already been accepted."
+        case .backendError(let m):      return "Backend error: \(m)"
+        case .serviceUnavailable:       return MarketplaceError.busyMessage
         }
+    }
+
+    /// User-facing message shown for any high-demand / outage condition.
+    public static let busyMessage = "BountyHunter is in high demand right now. Please try again in about 24 hours."
+
+    /// True when this error should show the demand banner (not a raw alert).
+    public var isBusy: Bool {
+        if case .serviceUnavailable = self { return true }
+        return false
     }
 }

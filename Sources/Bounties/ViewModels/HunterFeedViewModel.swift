@@ -10,6 +10,8 @@ final class HunterFeedViewModel {
     private(set) var openBounties: [Bounty] = []
     private(set) var isLoading = false
     var errorMessage: String?
+    /// Set to a `MarketplaceError.serviceUnavailable` when the backend is busy.
+    var busyError: Error?
 
     private let marketplace: any MarketplaceService
     private let hunterID: String
@@ -29,6 +31,8 @@ final class HunterFeedViewModel {
                 lat: coordinate.map { $0.latitude },
                 lng: coordinate.map { $0.longitude }
             )
+        } catch let err as MarketplaceError where err.isBusy {
+            busyError = err  // show banner, not alert
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -40,6 +44,8 @@ final class HunterFeedViewModel {
             _ = try await marketplace.acceptBounty(serverID: serverID, hunterID: hunterID)
             // Remove from open feed.
             openBounties.removeAll { $0.serverID == serverID || $0.id == bounty.id }
+        } catch let err as MarketplaceError where err.isBusy {
+            busyError = err
         } catch {
             errorMessage = error.localizedDescription
         }

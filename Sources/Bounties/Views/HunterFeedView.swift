@@ -59,6 +59,9 @@ struct HunterFeedView: View {
                 await vm.load(coordinate: location.coordinate)
             }
         }
+        .busyBannerForError($vm.busyError) {
+            Task { await vm.load(coordinate: location.coordinate) }
+        }
     }
 }
 

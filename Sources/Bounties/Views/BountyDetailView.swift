@@ -77,6 +77,7 @@ struct BountyDetailView: View {
         .overlay {
             if vm.isBusy { ProgressView() }
         }
+        .busyBannerForError($vm.busyError)
         .sheet(isPresented: $showEvidencePicker) {
             EvidencePickerView(onPick: { data in
                 guard let idx = pendingStepIdx else { return }

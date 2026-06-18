@@ -10,6 +10,8 @@ final class BountyDetailViewModel {
     private(set) var ledger = BountyLedger()
     private(set) var isBusy = false
     var errorMessage: String?
+    /// Set to a `MarketplaceError.serviceUnavailable` when the backend is busy.
+    var busyError: Error?
 
     let role: AppRole
     private let marketplace: any MarketplaceService
@@ -33,6 +35,8 @@ final class BountyDetailViewModel {
             bounty = try await marketplace.submitEvidence(serverBountyID: serverID,
                                                          stepIdx: stepIdx,
                                                          base64Photo: base64Photo)
+        } catch let err as MarketplaceError where err.isBusy {
+            busyError = err
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -53,6 +57,8 @@ final class BountyDetailViewModel {
             ledger.recordApproval(bountyID: bounty.id, stepID: step.id,
                                   amountCents: step.amountCents)
             bounty = updated
+        } catch let err as MarketplaceError where err.isBusy {
+            busyError = err
         } catch {
             errorMessage = error.localizedDescription
         }

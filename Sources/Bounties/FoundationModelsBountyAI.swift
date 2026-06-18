@@ -23,9 +23,12 @@ import FoundationModels
 final class FoundationModelsBountyAI: BountyAIService, Sendable {
 
     func breakdown(description: String, photoContext: String?) async -> BountyBreakdown {
+        // Model unavailable (iOS < 26, device lacks Apple Intelligence, quota/temp error).
         guard case .available = SystemLanguageModel.default.availability else {
-            return await StubBountyAIService().breakdown(description: description,
-                                                         photoContext: photoContext)
+            var result = await StubBountyAIService().breakdown(description: description,
+                                                               photoContext: photoContext)
+            result.summary = "AI suggestions unavailable right now — we've set up a default breakdown you can adjust below."
+            return result
         }
         if let result = await tier1(description: description, photoContext: photoContext) {
             return result
@@ -33,8 +36,11 @@ final class FoundationModelsBountyAI: BountyAIService, Sendable {
         if let result = await tier2(description: description) {
             return result
         }
-        return await StubBountyAIService().breakdown(description: description,
-                                                     photoContext: photoContext)
+        // All AI tiers failed — use stub but surface a friendly note.
+        var result = await StubBountyAIService().breakdown(description: description,
+                                                           photoContext: photoContext)
+        result.summary = "AI suggestions unavailable right now — we've set up a default breakdown you can adjust below."
+        return result
     }
 
     private func tier1(description: String, photoContext: String?) async -> BountyBreakdown? {

@@ -22,6 +22,8 @@ final class PostBountyViewModel {
     private(set) var breakdown: BountyBreakdown?
     private(set) var postedBounty: Bounty?
     var errorMessage: String?
+    /// Set to a `MarketplaceError.serviceUnavailable` to show the demand banner.
+    var busyError: Error?
 
     private(set) var usedFallback = false
 
@@ -99,6 +101,9 @@ final class PostBountyViewModel {
             }
             postedBounty = posted
             phase = .posted
+        } catch let err as MarketplaceError where err.isBusy {
+            busyError = err
+            phase = .reviewing  // stay on review screen; banner appears
         } catch {
             errorMessage = error.localizedDescription
             phase = .reviewing
@@ -117,6 +122,7 @@ final class PostBountyViewModel {
         breakdown = nil
         postedBounty = nil
         errorMessage = nil
+        busyError = nil
         usedFallback = false
     }
 }

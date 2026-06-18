@@ -23,6 +23,9 @@ struct PostBountyView: View {
             }
         }
         .navigationTitle("Post a BountyHunter Job")
+        .busyBannerForError($vm.busyError) {
+            // Retry: stay on reviewing phase — user taps Pay again.
+        }
     }
 }
 
