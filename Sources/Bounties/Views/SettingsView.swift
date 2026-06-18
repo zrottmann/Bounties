@@ -8,7 +8,7 @@ struct SettingsView: View {
     private let version: String = {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-        return "Bounties v\(v) (\(b))"
+        return "BountyHunter v\(v) (\(b))"
     }()
 
     var body: some View {
@@ -30,7 +30,7 @@ struct SettingsView: View {
 
                 Section("About") {
                     LabeledContent("Version", value: version)
-                    Text("Bounties — Uber for household chores. Post a job, fund it with Apple Pay, and hunters complete it step by step with evidence photos.")
+                    Text("BountyHunter — Uber for household chores. Post a job, fund it with Apple Pay, and hunters complete it step by step with evidence photos.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

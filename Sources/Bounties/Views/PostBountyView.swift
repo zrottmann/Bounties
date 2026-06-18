@@ -25,7 +25,7 @@ struct PostBountyView: View {
                 PostedConfirmation(bounty: vm.postedBounty!)
             }
         }
-        .navigationTitle("Post a Bounty")
+        .navigationTitle("Post a BountyHunter Job")
     }
 }
 

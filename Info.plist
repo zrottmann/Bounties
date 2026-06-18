@@ -5,13 +5,13 @@
     <key>CFBundleIdentifier</key>
     <string>com.zrottmann.bounties</string>
     <key>CFBundleName</key>
-    <string>Bounties</string>
+    <string>BountyHunter</string>
     <key>CFBundleDisplayName</key>
-    <string>Bounties</string>
+    <string>BountyHunter</string>
     <key>CFBundleShortVersionString</key>
     <string>0.1.0</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>2</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundlePackageType</key>
@@ -23,9 +23,9 @@
         <string>UIInterfaceOrientationPortrait</string>
     </array>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Bounties needs access to your photos so you can attach a picture of the job and upload evidence when a step is complete.</string>
+    <string>BountyHunter needs access to your photos so you can attach a picture of the job and upload evidence when a step is complete.</string>
     <key>NSCameraUsageDescription</key>
-    <string>Bounties uses your camera so you can take a photo of the job or capture evidence when completing a step.</string>
+    <string>BountyHunter uses your camera so you can take a photo of the job or capture evidence when completing a step.</string>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
     <key>CFBundleIcons</key>
