@@ -37,6 +37,9 @@ public enum BountyStatus: String, Codable, Equatable, Sendable {
 /// A posted household chore job.
 public struct Bounty: Identifiable, Equatable, Codable, Sendable {
     public var id: UUID
+    /// Server-assigned document ID (e.g. "bnty_abc123"). Set after the backend
+    /// creates the record; nil for locally-created drafts that haven't been posted yet.
+    public var serverID: String?
     /// Short description typed by the holder, e.g. "Rake my front yard".
     public var description: String
     /// AI-produced one-sentence summary (set after the AI call).
@@ -52,6 +55,8 @@ public struct Bounty: Identifiable, Equatable, Codable, Sendable {
     public var holderID: String
     /// Device/user ID of the hunter who accepted the bounty (nil when open).
     public var hunterID: String?
+    /// Approximate distance from the hunter (km). Set by backend on /list-open.
+    public var distanceKm: Double?
 
     // MARK: - Derived
 
@@ -62,6 +67,7 @@ public struct Bounty: Identifiable, Equatable, Codable, Sendable {
 
     public init(
         id: UUID = UUID(),
+        serverID: String? = nil,
         description: String,
         holderID: String,
         photoReference: String? = nil,
@@ -69,12 +75,60 @@ public struct Bounty: Identifiable, Equatable, Codable, Sendable {
         createdAt: Date = .now
     ) {
         self.id = id
+        self.serverID = serverID
         self.description = description
         self.holderID = holderID
         self.photoReference = photoReference
         self.steps = steps
         self.createdAt = createdAt
         self.status = .draft
+        self.distanceKm = nil
+    }
+}
+
+// MARK: - Message
+
+/// A chat message on a per-bounty thread (holder ↔ hunter ↔ observer).
+public struct BountyMessage: Identifiable, Equatable, Codable, Sendable {
+    public var id: String
+    public var bountyID: String
+    public var fromRole: String   // "holder" | "hunter" | "observer"
+    public var accountID: String
+    public var text: String
+    public var createdAt: Date
+
+    public init(id: String = UUID().uuidString, bountyID: String, fromRole: String,
+                accountID: String, text: String, createdAt: Date = .now) {
+        self.id = id
+        self.bountyID = bountyID
+        self.fromRole = fromRole
+        self.accountID = accountID
+        self.text = text
+        self.createdAt = createdAt
+    }
+}
+
+// MARK: - Dispute
+
+public struct BountyDispute: Identifiable, Equatable, Codable, Sendable {
+    public var id: String
+    public var bountyID: String
+    public var stepIdx: Int
+    public var openedBy: String
+    public var reason: String
+    public var state: String       // "open" | "resolved"
+    public var resolution: String?
+
+    public init(id: String = UUID().uuidString, bountyID: String, stepIdx: Int,
+                openedBy: String, reason: String, state: String = "open",
+                resolution: String? = nil) {
+        self.id = id
+        self.bountyID = bountyID
+        self.stepIdx = stepIdx
+        self.openedBy = openedBy
+        self.reason = reason
+        self.state = state
+        self.resolution = resolution
     }
 }
 

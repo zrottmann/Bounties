@@ -11,7 +11,7 @@
     <key>CFBundleShortVersionString</key>
     <string>0.1.0</string>
     <key>CFBundleVersion</key>
-    <string>2</string>
+    <string>3</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundlePackageType</key>
@@ -26,6 +26,8 @@
     <string>BountyHunter needs access to your photos so you can attach a picture of the job and upload evidence when a step is complete.</string>
     <key>NSCameraUsageDescription</key>
     <string>BountyHunter uses your camera so you can take a photo of the job or capture evidence when completing a step.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>BountyHunter uses your location to show nearby jobs and sort the hunter feed by distance.</string>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
     <key>CFBundleIcons</key>

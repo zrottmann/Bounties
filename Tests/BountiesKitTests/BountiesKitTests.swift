@@ -170,7 +170,7 @@ final class BountiesKitTests: XCTestCase {
                        "stub step amounts must sum to the suggested total")
     }
 
-    // MARK: - Marketplace stub
+    // MARK: - Marketplace stub (new index-based + serverID API)
 
     func testStubMarketplaceFullFlow() async throws {
         let svc = StubMarketplaceService()
@@ -183,28 +183,31 @@ final class BountiesKitTests: XCTestCase {
         bounty.steps = [step1, step2]
         let posted = try await svc.postBounty(bounty)
         XCTAssertEqual(posted.status, .funded)
+        let serverID = try XCTUnwrap(posted.serverID, "stub must set a serverID")
 
         // List open bounties — should include our post.
-        let open = try await svc.listOpenBounties()
-        XCTAssertTrue(open.contains { $0.id == posted.id })
+        let open = try await svc.listOpenBounties(lat: nil, lng: nil)
+        XCTAssertTrue(open.contains { $0.serverID == serverID })
 
         // Hunter accepts.
-        let accepted = try await svc.acceptBounty(id: posted.id, hunterID: "hunter-1")
+        let accepted = try await svc.acceptBounty(serverID: serverID, hunterID: "hunter-1")
         XCTAssertEqual(accepted.status, .accepted)
         XCTAssertEqual(accepted.hunterID, "hunter-1")
 
-        // Hunter submits evidence for step 1.
+        // Hunter submits evidence for step 0 (pull weeds).
         let evidenced = try await svc.submitEvidence(
-            bountyID: posted.id, stepID: step1.id, reference: "photo_ref_abc")
-        XCTAssertEqual(evidenced.steps.first?.evidenceReference, "photo_ref_abc")
+            serverBountyID: serverID, stepIdx: 0, base64Photo: "photo_ref_abc")
+        XCTAssertEqual(evidenced.steps[0].evidenceReference, "photo_ref_abc")
 
-        // Holder approves step 1.
-        let afterApprove1 = try await svc.approveStep(bountyID: posted.id, stepID: step1.id)
-        XCTAssertTrue(afterApprove1.steps.first(where: { $0.id == step1.id })!.isApproved)
+        // Holder approves step 0.
+        let afterApprove1 = try await svc.approveStep(
+            serverBountyID: serverID, stepIdx: 0, accountID: "holder-1")
+        XCTAssertTrue(afterApprove1.steps[0].isApproved)
         XCTAssertEqual(afterApprove1.status, .reviewing)
 
-        // Holder approves step 2 → bounty auto-completes.
-        let final = try await svc.approveStep(bountyID: posted.id, stepID: step2.id)
+        // Holder approves step 1 → bounty auto-completes.
+        let final = try await svc.approveStep(
+            serverBountyID: serverID, stepIdx: 1, accountID: "holder-1")
         XCTAssertEqual(final.status, .completed)
         XCTAssertTrue(final.steps.allSatisfy(\.isApproved))
     }
@@ -212,13 +215,48 @@ final class BountiesKitTests: XCTestCase {
     func testAcceptingNonExistentBountyThrows() async {
         let svc = StubMarketplaceService()
         do {
-            _ = try await svc.acceptBounty(id: UUID(), hunterID: "h1")
+            _ = try await svc.acceptBounty(serverID: "does-not-exist", hunterID: "h1")
             XCTFail("Should have thrown")
         } catch MarketplaceError.notFound {
             // expected
         } catch {
             XCTFail("Wrong error: \(error)")
         }
+    }
+
+    func testStubMessagingRoundTrip() async throws {
+        let svc = StubMarketplaceService()
+        var bounty = Bounty(description: "Mow lawn", holderID: "h1")
+        bounty.steps = [BountyStep(title: "Mow", amountCents: 1000)]
+        let posted = try await svc.postBounty(bounty)
+        let serverID = try XCTUnwrap(posted.serverID)
+
+        let sent = try await svc.sendMessage(serverBountyID: serverID,
+                                             accountID: "h1", text: "Hello hunter!")
+        XCTAssertEqual(sent.text, "Hello hunter!")
+
+        let fetched = try await svc.messages(serverBountyID: serverID)
+        XCTAssertEqual(fetched.count, 1)
+        XCTAssertEqual(fetched[0].text, "Hello hunter!")
+    }
+
+    func testStubDisputeOpenAndResolve() async throws {
+        let svc = StubMarketplaceService()
+        var bounty = Bounty(description: "Rake leaves", holderID: "h1")
+        bounty.steps = [BountyStep(title: "Rake", amountCents: 1000)]
+        let posted = try await svc.postBounty(bounty)
+        let serverID = try XCTUnwrap(posted.serverID)
+
+        let dispute = try await svc.openDispute(serverBountyID: serverID, stepIdx: 0,
+                                                accountID: "h1", reason: "Not done correctly")
+        XCTAssertEqual(dispute.state, "open")
+        XCTAssertEqual(dispute.reason, "Not done correctly")
+
+        let resolved = try await svc.resolveDispute(disputeID: dispute.id,
+                                                    resolution: "Redo required",
+                                                    accountID: "reviewer-1")
+        XCTAssertEqual(resolved.state, "resolved")
+        XCTAssertEqual(resolved.resolution, "Redo required")
     }
 
     // MARK: - Formatted display

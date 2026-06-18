@@ -2,10 +2,11 @@
 import Foundation
 
 /// The role the local user is playing in this session.
-/// In v1 this is a simple toggle — the same device can be a holder or a hunter.
-/// Real auth and role separation is a future increment.
+/// Holder posts and funds bounties; hunter accepts and completes them;
+/// reviewer can inspect evidence and resolve disputes.
 enum AppRole: String, CaseIterable {
-    case holder = "Holder"  // posts and funds bounties
-    case hunter = "Hunter"  // accepts and completes bounties
+    case holder   = "Holder"    // posts and funds bounties
+    case hunter   = "Hunter"    // accepts and completes bounties
+    case reviewer = "Reviewer"  // inspects evidence, resolves disputes
 }
 #endif

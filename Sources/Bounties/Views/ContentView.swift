@@ -6,20 +6,32 @@ struct ContentView: View {
     @Binding var role: AppRole
     let marketplace: any MarketplaceService
     let ai: any BountyAIService
+    let location: LocationService
+
+    private var accountID: String { BackendMarketplaceService.loadOrCreateAccountID() }
 
     var body: some View {
         TabView {
-            if role == .holder {
+            switch role {
+            case .holder:
                 PostBountyView(
-                    vm: PostBountyViewModel(ai: ai, marketplace: marketplace)
+                    vm: PostBountyViewModel(ai: ai, marketplace: marketplace,
+                                            holderID: accountID)
                 )
                 .tabItem { Label("Post", systemImage: "plus.circle.fill") }
-            } else {
+
+            case .hunter:
                 HunterFeedView(
-                    vm: HunterFeedViewModel(marketplace: marketplace),
-                    marketplace: marketplace
+                    vm: HunterFeedViewModel(marketplace: marketplace,
+                                            hunterID: accountID),
+                    marketplace: marketplace,
+                    location: location
                 )
                 .tabItem { Label("Find Bounties", systemImage: "magnifyingglass") }
+
+            case .reviewer:
+                ReviewerFeedView(marketplace: marketplace, location: location)
+                    .tabItem { Label("Review", systemImage: "checkmark.shield.fill") }
             }
 
             SettingsView(role: $role)

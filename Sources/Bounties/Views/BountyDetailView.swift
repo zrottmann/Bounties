@@ -4,8 +4,9 @@ import BountiesKit
 
 struct BountyDetailView: View {
     @State var vm: BountyDetailViewModel
+    let marketplace: any MarketplaceService
     @State private var showEvidencePicker = false
-    @State private var pendingStep: BountyStep?
+    @State private var pendingStepIdx: Int?
 
     var body: some View {
         List {
@@ -15,19 +16,25 @@ struct BountyDetailView: View {
                     Text(summary).foregroundColor(.secondary)
                 }
                 LabeledContent("Status", value: vm.bounty.status.rawValue.capitalized)
+                if let km = vm.bounty.distanceKm {
+                    LabeledContent("Distance", value: String(format: "%.1f km away", km))
+                }
             }
 
             Section("Steps") {
-                ForEach(vm.bounty.steps) { step in
+                ForEach(vm.bounty.steps.indices, id: \.self) { idx in
+                    let step = vm.bounty.steps[idx]
                     StepRow(
                         step: step,
-                        canApprove: vm.canApproveSteps && step.evidenceReference != nil && !step.isApproved,
-                        canSubmitEvidence: vm.canSubmitEvidence && step.evidenceReference == nil && !step.isApproved,
+                        canApprove: vm.canApproveSteps
+                            && step.evidenceReference != nil && !step.isApproved,
+                        canSubmitEvidence: vm.canSubmitEvidence
+                            && step.evidenceReference == nil && !step.isApproved,
                         onApprove: {
-                            Task { await vm.approveStep(step) }
+                            Task { await vm.approveStep(at: idx) }
                         },
                         onSubmitEvidence: {
-                            pendingStep = step
+                            pendingStepIdx = idx
                             showEvidencePicker = true
                         }
                     )
@@ -44,6 +51,22 @@ struct BountyDetailView: View {
                 }
             }
 
+            // Messages
+            Section("Chat") {
+                NavigationLink("Message Thread") {
+                    MessageThreadView(bounty: vm.bounty, role: vm.role,
+                                      marketplace: marketplace)
+                }
+            }
+
+            // Dispute panel — available to holder, hunter, and reviewer.
+            Section("Dispute") {
+                NavigationLink("Dispute Panel") {
+                    DisputeView(bounty: vm.bounty, role: vm.role,
+                                marketplace: marketplace)
+                }
+            }
+
             if let err = vm.errorMessage {
                 Section {
                     Text(err).foregroundColor(.red)
@@ -54,13 +77,11 @@ struct BountyDetailView: View {
         .overlay {
             if vm.isBusy { ProgressView() }
         }
-        // Evidence photo picker (simplified — in production use PHPickerViewController).
         .sheet(isPresented: $showEvidencePicker) {
             EvidencePickerView(onPick: { data in
-                guard let step = pendingStep else { return }
-                // Convert to a base-64 string as the evidence reference.
+                guard let idx = pendingStepIdx else { return }
                 let ref = data.base64EncodedString()
-                Task { await vm.submitEvidence(for: step, reference: ref) }
+                Task { await vm.submitEvidence(at: idx, base64Photo: ref) }
                 showEvidencePicker = false
             })
         }
@@ -109,7 +130,7 @@ private struct StepRow: View {
     }
 }
 
-// MARK: - Evidence picker shim
+// MARK: - Evidence picker
 
 private struct EvidencePickerView: UIViewControllerRepresentable {
     let onPick: (Data) -> Void
@@ -120,13 +141,16 @@ private struct EvidencePickerView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.delegate = context.coordinator
-        picker.sourceType = UIImagePickerController.isSourceTypeAvailable(.camera) ? .camera : .photoLibrary
+        picker.sourceType = UIImagePickerController.isSourceTypeAvailable(.camera)
+            ? .camera : .photoLibrary
         return picker
     }
 
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
 
-    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+    final class Coordinator: NSObject,
+                              UINavigationControllerDelegate,
+                              UIImagePickerControllerDelegate {
         let parent: EvidencePickerView
         init(_ parent: EvidencePickerView) { self.parent = parent }
 

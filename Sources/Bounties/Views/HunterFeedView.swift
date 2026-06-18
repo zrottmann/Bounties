@@ -5,6 +5,7 @@ import BountiesKit
 struct HunterFeedView: View {
     @State var vm: HunterFeedViewModel
     let marketplace: any MarketplaceService
+    let location: LocationService
 
     var body: some View {
         NavigationStack {
@@ -23,7 +24,8 @@ struct HunterFeedView: View {
                         NavigationLink(destination: BountyDetailView(
                             vm: BountyDetailViewModel(bounty: bounty,
                                                       marketplace: marketplace,
-                                                      role: .hunter)
+                                                      role: .hunter),
+                            marketplace: marketplace
                         )) {
                             BountyRow(bounty: bounty)
                         }
@@ -33,12 +35,29 @@ struct HunterFeedView: View {
             .navigationTitle("Open Bounties")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button(action: { Task { await vm.load() } }) {
+                    Button(action: { Task { await vm.load(coordinate: location.coordinate) } }) {
                         Label("Refresh", systemImage: "arrow.clockwise")
                     }
                 }
+                ToolbarItem(placement: .topBarLeading) {
+                    if location.isAvailable {
+                        Label("Location on", systemImage: "location.fill")
+                            .font(.caption)
+                            .foregroundColor(.accentColor)
+                    } else {
+                        Button {
+                            location.requestLocation()
+                        } label: {
+                            Label("Enable location", systemImage: "location.slash")
+                        }
+                        .font(.caption)
+                    }
+                }
             }
-            .task { await vm.load() }
+            .task {
+                location.requestLocation()
+                await vm.load(coordinate: location.coordinate)
+            }
         }
     }
 }
@@ -54,6 +73,11 @@ private struct BountyRow: View {
                     .font(.headline)
                     .foregroundColor(.accentColor)
                 Spacer()
+                if let km = bounty.distanceKm {
+                    Text(String(format: "%.1f km", km))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
                 Text("\(bounty.steps.count) steps")
                     .font(.caption)
                     .foregroundColor(.secondary)

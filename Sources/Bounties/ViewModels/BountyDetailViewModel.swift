@@ -11,23 +11,28 @@ final class BountyDetailViewModel {
     private(set) var isBusy = false
     var errorMessage: String?
 
+    let role: AppRole
     private let marketplace: any MarketplaceService
-    private let role: AppRole
+    private let accountID: String
 
     init(bounty: Bounty, marketplace: any MarketplaceService, role: AppRole) {
         self.bounty = bounty
         self.marketplace = marketplace
         self.role = role
+        self.accountID = BackendMarketplaceService.loadOrCreateAccountID()
     }
 
     // MARK: - Hunter: submit step evidence
 
-    func submitEvidence(for step: BountyStep, reference: String) async {
+    func submitEvidence(at stepIdx: Int, base64Photo: String) async {
+        guard stepIdx < bounty.steps.count else { return }
+        let serverID = bounty.serverID ?? bounty.id.uuidString
         isBusy = true
         defer { isBusy = false }
         do {
-            bounty = try await marketplace.submitEvidence(
-                bountyID: bounty.id, stepID: step.id, reference: reference)
+            bounty = try await marketplace.submitEvidence(serverBountyID: serverID,
+                                                         stepIdx: stepIdx,
+                                                         base64Photo: base64Photo)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -35,12 +40,16 @@ final class BountyDetailViewModel {
 
     // MARK: - Holder: approve step
 
-    func approveStep(_ step: BountyStep) async {
+    func approveStep(at stepIdx: Int) async {
+        guard stepIdx < bounty.steps.count else { return }
+        let step = bounty.steps[stepIdx]
+        let serverID = bounty.serverID ?? bounty.id.uuidString
         isBusy = true
         defer { isBusy = false }
         do {
-            let updated = try await marketplace.approveStep(bountyID: bounty.id, stepID: step.id)
-            // Record in ledger.
+            let updated = try await marketplace.approveStep(serverBountyID: serverID,
+                                                           stepIdx: stepIdx,
+                                                           accountID: accountID)
             ledger.recordApproval(bountyID: bounty.id, stepID: step.id,
                                   amountCents: step.amountCents)
             bounty = updated
@@ -51,7 +60,7 @@ final class BountyDetailViewModel {
 
     // MARK: - Display helpers
 
-    var canApproveSteps: Bool { role == .holder }
+    var canApproveSteps: Bool  { role == .holder || role == .reviewer }
     var canSubmitEvidence: Bool { role == .hunter }
 
     var totalEarnedDisplay: String {

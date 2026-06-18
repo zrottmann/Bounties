@@ -78,8 +78,10 @@ final class PostBountyViewModel {
     /// data — stored for the future backend; ignored in stub mode).
     func fundingSucceeded(paymentToken: Data?) async {
         guard let bd = breakdown else { return }
+        // Pass photo as base64 so the backend can upload it to Appwrite Storage.
+        let photoB64 = photoData.map { $0.base64EncodedString() }
         var bounty = Bounty(description: description, holderID: holderID,
-                            photoReference: nil, steps: bd.steps)
+                            photoReference: photoB64, steps: bd.steps)
         bounty.summary = bd.summary
         do {
             postedBounty = try await marketplace.postBounty(bounty)

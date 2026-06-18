@@ -1,5 +1,6 @@
 #if os(iOS)
 import Foundation
+import CoreLocation
 import Observation
 import BountiesKit
 
@@ -19,24 +20,26 @@ final class HunterFeedViewModel {
         self.hunterID = hunterID
     }
 
-    func load() async {
+    func load(coordinate: CLLocationCoordinate2D? = nil) async {
         isLoading = true
         errorMessage = nil
+        defer { isLoading = false }
         do {
-            openBounties = try await marketplace.listOpenBounties()
+            openBounties = try await marketplace.listOpenBounties(
+                lat: coordinate.map { $0.latitude },
+                lng: coordinate.map { $0.longitude }
+            )
         } catch {
             errorMessage = error.localizedDescription
         }
-        isLoading = false
     }
 
     func accept(bounty: Bounty) async {
+        let serverID = bounty.serverID ?? bounty.id.uuidString
         do {
-            let updated = try await marketplace.acceptBounty(id: bounty.id, hunterID: hunterID)
-            // Replace in list.
-            if let idx = openBounties.firstIndex(where: { $0.id == updated.id }) {
-                openBounties.remove(at: idx)
-            }
+            _ = try await marketplace.acceptBounty(serverID: serverID, hunterID: hunterID)
+            // Remove from open feed.
+            openBounties.removeAll { $0.serverID == serverID || $0.id == bounty.id }
         } catch {
             errorMessage = error.localizedDescription
         }
