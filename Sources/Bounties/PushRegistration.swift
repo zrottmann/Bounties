@@ -2,6 +2,7 @@
 import Foundation
 import UIKit
 import UserNotifications
+import BountiesKit
 
 // MARK: - Push notification registration
 //

@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Core models
 
 /// One discrete step of a bounty job, each with its own price and evidence state.
-public struct BountyStep: Identifiable, Equatable, Codable, Sendable {
+public struct BountyStep: Identifiable, Equatable, Hashable, Codable, Sendable {
     public var id: UUID
     /// Human-readable title, e.g. "Rake leaves into piles".
     public var title: String
