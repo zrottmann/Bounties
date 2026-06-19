@@ -295,9 +295,9 @@ final class BountiesKitTests: XCTestCase {
         let offer = SurgePricing.currentOfferCents(
             basePriceCents: base, maxPriceCents: max,
             surgeHours: surgeHours, postedAt: postedAt)
-        // Expected: 2000 + 0.5 * (4000 - 2000) = 3000
-        XCTAssertEqual(offer, 3000, accuracy: 1,
-                       "midpoint offer must be halfway between base and max")
+        // Expected: 2000 + 0.5 * (4000 - 2000) = 3000; allow ±1 for rounding.
+        XCTAssertTrue(abs(offer - 3000) <= 1,
+                      "midpoint offer \(offer) must be near 3000 (half of base→max)")
     }
 
     func testSurgeClampedToMax() {
