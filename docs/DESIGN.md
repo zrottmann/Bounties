@@ -100,3 +100,26 @@ C:\Bounties
 3. `StubBountyAIService` — always produces a deterministic 3-step result.
 
 Wrapped in `#if canImport(FoundationModels)` so the macOS CI host compiles cleanly (the framework is iOS 26+ only).
+
+The AI now returns a `marketPriceCents` field alongside `suggestedTotalCents`. This seeds the surge base price — the "fair market value" estimate that the offer starts at.
+
+## Surge Pricing (build 6)
+
+**Inverse-Uber model:** unlike ride-share where high demand inflates the _rider's_ cost, here rising price _attracts supply_ (hunters). A bounty's offered price rises linearly from `basePriceCents` (at t=0) to `maxPriceCents` (at `t=surgeHours`). Once a hunter accepts, the price is frozen (`lockedPriceCents`).
+
+```
+t=0            t=surgeHours
+basePriceCents ──────────────► maxPriceCents
+```
+
+**Pure on-read interpolation** — no background job, no cron:
+- Server: `surgePriceNow()` in `main.js` → `currentOfferCents` included in every bounty object from `/list-open` and `/accept`.
+- Client: `SurgePricing.currentOfferCents()` in `BountiesKit` mirrors the formula for local display. Ticks every 5s in `BountyRow`.
+
+**Lock on accept:** `/accept` calls `surgePriceNow()` on the live bounty data and writes `lockedPriceCents`. After acceptance, `currentOfferCents == lockedPriceCents` — the price never changes again.
+
+**Real payment flow (future):**
+1. When Apple Pay sheet presents, authorize up to `maxPriceCents`.
+2. On accept, capture exactly `lockedPriceCents`.
+3. Refund `maxPriceCents - lockedPriceCents` if lockedPrice < authorized amount.
+(Currently simulated; no real capture until Stripe Connect is wired.)

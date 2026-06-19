@@ -58,12 +58,40 @@ public struct Bounty: Identifiable, Equatable, Codable, Sendable {
     /// Approximate distance from the hunter (km). Set by backend on /list-open.
     public var distanceKm: Double?
 
+    // MARK: - Surge pricing fields
+
+    /// AI-suggested market base price (cents). Offer starts here at t=0.
+    public var basePriceCents: Int
+    /// Holder's maximum offer ceiling (cents). Offer reaches this at t=surgeHours.
+    public var maxPriceCents: Int
+    /// Hours over which the offer rises from base to max.
+    public var surgeHours: Double
+    /// When the bounty was posted (for elapsed-time interpolation).
+    public var postedAt: Date
+    /// Set at acceptance to freeze the price. Nil while the bounty is open.
+    public var lockedPriceCents: Int?
+    /// Current interpolated offer from the server (set by /list-open or /detail).
+    /// If nil, compute locally with SurgePricing.currentOfferCents.
+    public var currentOfferCents: Int?
+
     // MARK: - Derived
 
     /// Sum of all step amounts. This is the canonical total — steps must re-sum here.
     public var totalCents: Int { steps.reduce(0) { $0 + $1.amountCents } }
     public var approvedCents: Int { steps.filter(\.isApproved).reduce(0) { $0 + $1.amountCents } }
     public var pendingCents: Int { totalCents - approvedCents }
+
+    /// The price to show right now: locked > server-provided > locally interpolated.
+    public var displayOfferCents: Int {
+        if let locked = lockedPriceCents { return locked }
+        if let current = currentOfferCents { return current }
+        return SurgePricing.currentOfferCents(
+            basePriceCents: basePriceCents,
+            maxPriceCents: maxPriceCents,
+            surgeHours: surgeHours,
+            postedAt: postedAt
+        )
+    }
 
     public init(
         id: UUID = UUID(),
@@ -72,7 +100,11 @@ public struct Bounty: Identifiable, Equatable, Codable, Sendable {
         holderID: String,
         photoReference: String? = nil,
         steps: [BountyStep] = [],
-        createdAt: Date = .now
+        createdAt: Date = .now,
+        basePriceCents: Int = 0,
+        maxPriceCents: Int = 0,
+        surgeHours: Double = 2.0,
+        postedAt: Date = .now
     ) {
         self.id = id
         self.serverID = serverID
@@ -83,6 +115,12 @@ public struct Bounty: Identifiable, Equatable, Codable, Sendable {
         self.createdAt = createdAt
         self.status = .draft
         self.distanceKm = nil
+        self.basePriceCents = basePriceCents
+        self.maxPriceCents = maxPriceCents
+        self.surgeHours = surgeHours
+        self.postedAt = postedAt
+        self.lockedPriceCents = nil
+        self.currentOfferCents = nil
     }
 }
 

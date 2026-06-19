@@ -6,16 +6,24 @@ import Foundation
 public struct BountyBreakdown: Sendable, Equatable {
     /// One-sentence summary of the job.
     public var summary: String
-    /// Fair price suggestion in cents (before the holder sets the final total).
+    /// Fair market price suggestion in cents — the AI's estimate of the job's
+    /// value based on comparable tasks. Used as the suggested base price in
+    /// surge pricing; the holder may adjust it.
     public var suggestedTotalCents: Int
     /// Step-by-step breakdown. Amounts sum to `suggestedTotalCents` after
     /// `FeeMath.reconcile(steps:to:)` is applied.
     public var steps: [BountyStep]
+    /// Explicit AI market-based starting price. When the AI returns a separate
+    /// `marketPriceCents` field this differs from `suggestedTotalCents`; otherwise
+    /// they are the same (backward-compatible).
+    public var suggestedMarketCents: Int
 
-    public init(summary: String, suggestedTotalCents: Int, steps: [BountyStep]) {
+    public init(summary: String, suggestedTotalCents: Int, steps: [BountyStep],
+                suggestedMarketCents: Int? = nil) {
         self.summary = summary
         self.suggestedTotalCents = suggestedTotalCents
         self.steps = steps
+        self.suggestedMarketCents = suggestedMarketCents ?? suggestedTotalCents
     }
 }
 

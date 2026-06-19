@@ -48,9 +48,12 @@ final class FoundationModelsBountyAI: BountyAIService, Sendable {
         You are a household-chore pricing assistant for the BountyHunter app. \
         When given a job description you ALWAYS respond with valid JSON and nothing else \
         (no markdown fences, no backticks, no explanation). Use this exact shape:
-        {"summary":"<one sentence>","suggestedTotalCents":<integer>,"steps":[{"title":"<string>","amountCents":<integer>}]}
+        {"summary":"<one sentence>","suggestedTotalCents":<integer>,"marketPriceCents":<integer>,"steps":[{"title":"<string>","amountCents":<integer>}]}
         Rules: 2–6 steps. Step amountCents must sum exactly to suggestedTotalCents. \
-        Price range is $5–$300 (500–30000 cents). Keep step titles action-oriented and short.
+        Price range is $5–$300 (500–30000 cents). Keep step titles action-oriented and short. \
+        marketPriceCents is your AI market-rate estimate for the whole job — the fair price \
+        a professional would charge locally. It may differ from suggestedTotalCents if the \
+        holder's steps don't reflect market value.
         """
         let prompt = photoContext.map { "Job: \(description)\nPhoto context: \($0)" }
                      ?? "Job: \(description)"
@@ -66,7 +69,7 @@ final class FoundationModelsBountyAI: BountyAIService, Sendable {
     private func tier2(description: String) async -> BountyBreakdown? {
         let instructions = """
         Reply with ONLY JSON, no markdown. Shape: \
-        {"summary":"short sentence","suggestedTotalCents":2500,"steps":[{"title":"Step","amountCents":1250},{"title":"Step 2","amountCents":1250}]}
+        {"summary":"short sentence","suggestedTotalCents":2500,"marketPriceCents":2500,"steps":[{"title":"Step","amountCents":1250},{"title":"Step 2","amountCents":1250}]}
         2–3 steps only. Amounts must sum to suggestedTotalCents.
         """
         do {
@@ -98,8 +101,9 @@ final class FoundationModelsBountyAI: BountyAIService, Sendable {
         }
         guard !steps.isEmpty else { return nil }
         let reconciled = FeeMath.reconcile(steps: steps, to: totalCents)
+        let marketCents = obj["marketPriceCents"] as? Int  // nil → defaults to totalCents
         return BountyBreakdown(summary: summary, suggestedTotalCents: totalCents,
-                               steps: reconciled)
+                               steps: reconciled, suggestedMarketCents: marketCents)
     }
 }
 #endif // canImport(FoundationModels)

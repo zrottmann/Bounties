@@ -17,6 +17,10 @@ final class PostBountyViewModel {
     var description: String = ""
     var photoData: Data?        // raw JPEG from picker/camera
     var priceCents: Int = 2500  // holder's agreed total ($25 default)
+    /// Maximum price the holder will pay; offer surges from priceCents → maxPriceCents.
+    var maxPriceCents: Int = 5000
+    /// Hours over which the offer rises from priceCents to maxPriceCents.
+    var surgeHours: Double = 2.0
 
     private(set) var phase: Phase = .idle
     private(set) var breakdown: BountyBreakdown?
@@ -51,12 +55,19 @@ final class PostBountyViewModel {
         errorMessage = nil
         phase = .analyzing
         let result = await ai.breakdown(description: desc, photoContext: nil)
-        // Apply the holder's set price to the AI steps.
+        // Seed priceCents from the AI market price, then apply to steps.
+        // The holder can still adjust on the review screen.
+        if result.suggestedMarketCents > 0 {
+            priceCents    = result.suggestedMarketCents
+            maxPriceCents = max(result.suggestedMarketCents,
+                                Int(Double(result.suggestedMarketCents) * 2.0))
+        }
         let reconciled = FeeMath.reconcile(steps: result.steps, to: priceCents)
         breakdown = BountyBreakdown(
             summary: result.summary,
             suggestedTotalCents: priceCents,
-            steps: reconciled
+            steps: reconciled,
+            suggestedMarketCents: result.suggestedMarketCents
         )
         phase = .reviewing
     }
@@ -84,7 +95,9 @@ final class PostBountyViewModel {
         // Pass photo as base64 so the backend can upload it to Appwrite Storage.
         let photoB64 = photoData.map { $0.base64EncodedString() }
         var bounty = Bounty(description: description, holderID: holderID,
-                            photoReference: photoB64, steps: bd.steps)
+                            photoReference: photoB64, steps: bd.steps,
+                            basePriceCents: priceCents, maxPriceCents: maxPriceCents,
+                            surgeHours: surgeHours, postedAt: .now)
         bounty.summary = bd.summary
         do {
             // 1. Post the bounty (creates it open/funded in state).
@@ -118,6 +131,8 @@ final class PostBountyViewModel {
         description = ""
         photoData = nil
         priceCents = 2500
+        maxPriceCents = 5000
+        surgeHours = 2.0
         phase = .idle
         breakdown = nil
         postedBounty = nil

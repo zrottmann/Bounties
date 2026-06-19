@@ -113,6 +113,17 @@ private struct BreakdownReview: View {
                 Text(vm.breakdown?.summary ?? "").foregroundColor(.secondary)
             }
 
+            if let market = vm.breakdown?.suggestedMarketCents, market != vm.priceCents {
+                Section {
+                    Label(
+                        "AI market price: \(FeeMath.formatted(cents: market))",
+                        systemImage: "sparkles"
+                    )
+                    .font(.subheadline)
+                    .foregroundColor(.accentColor)
+                }
+            }
+
             Section("Step-by-step breakdown") {
                 ForEach(vm.breakdown?.steps ?? []) { step in
                     HStack {
@@ -124,13 +135,37 @@ private struct BreakdownReview: View {
                 }
             }
 
+            Section("Surge pricing") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Starting offer")
+                        .font(.caption).foregroundColor(.secondary)
+                    PriceSlider(cents: $vm.priceCents)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Max offer (if no one accepts quickly)")
+                        .font(.caption).foregroundColor(.secondary)
+                    PriceSlider(cents: $vm.maxPriceCents)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Rises to max over: \(surgeLabel(vm.surgeHours))")
+                        .font(.caption).foregroundColor(.secondary)
+                    Slider(value: $vm.surgeHours, in: 0.5...12.0, step: 0.5)
+                }
+                .onChange(of: vm.maxPriceCents) { _, new in
+                    // Keep max ≥ base.
+                    if new < vm.priceCents { vm.maxPriceCents = vm.priceCents }
+                }
+            }
+
             Section("Payment breakdown") {
-                LabeledContent("Total you pay",
+                LabeledContent("Starting offer",
                                value: FeeMath.formatted(cents: vm.priceCents))
+                LabeledContent("Max offer",
+                               value: FeeMath.formatted(cents: vm.maxPriceCents))
                 LabeledContent("Platform fee (1%)",
                                value: FeeMath.formatted(cents: vm.appFeeCents))
                     .foregroundColor(.secondary)
-                LabeledContent("Hunter receives",
+                LabeledContent("Hunter receives (min)",
                                value: FeeMath.formatted(cents: vm.hunterPayoutCents))
                     .bold()
             }
@@ -143,6 +178,13 @@ private struct BreakdownReview: View {
             }
         }
         .navigationTitle("Review Breakdown")
+    }
+
+    private func surgeLabel(_ hours: Double) -> String {
+        if hours < 1 { return "\(Int(hours * 60))m" }
+        let h = Int(hours)
+        let m = Int((hours - Double(h)) * 60)
+        return m == 0 ? "\(h)h" : "\(h)h \(m)m"
     }
 }
 
@@ -188,20 +230,59 @@ private struct ApplePayFundButton: View {
     }
 }
 
-// MARK: - Funding view (in-flight progress)
+// MARK: - Funding / waiting view (Uber-style "finding hunters" screen)
 
 private struct FundingView: View {
     @State var vm: PostBountyViewModel
+    @State private var elapsed: TimeInterval = 0
+    @State private var timer: Timer?
 
     var body: some View {
-        VStack(spacing: 24) {
-            ProgressView("Posting bounty…")
+        VStack(spacing: 32) {
+            Spacer()
+            // Pulsing circle animation — grows/shrinks to signal activity.
+            ZStack {
+                Circle()
+                    .strokeBorder(Color.accentColor.opacity(0.25), lineWidth: 2)
+                    .frame(width: 120, height: 120)
+                    .scaleEffect(1 + 0.1 * sin(elapsed * 2))
+                Circle()
+                    .fill(Color.accentColor.opacity(0.12))
+                    .frame(width: 80, height: 80)
+                Image(systemName: "person.2.fill")
+                    .font(.system(size: 30))
+                    .foregroundColor(.accentColor)
+            }
+            .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true),
+                        value: elapsed)
+
+            VStack(spacing: 8) {
+                Text("Finding nearby hunters…")
+                    .font(.title2.bold())
+                Text("Your offer starts at \(FeeMath.formatted(cents: vm.priceCents))")
+                    .foregroundColor(.secondary)
+                if vm.maxPriceCents > vm.priceCents {
+                    Text("and rises to \(FeeMath.formatted(cents: vm.maxPriceCents)) if no one accepts yet")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .multilineTextAlignment(.center)
+
+            Spacer()
         }
-        .navigationTitle("Funding")
+        .padding()
+        .navigationTitle("Finding Hunters")
+        .onAppear {
+            timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
+                elapsed += 0.05
+            }
+        }
+        .onDisappear { timer?.invalidate() }
     }
 }
 
-// MARK: - Posted confirmation
+// MARK: - Posted confirmation (transitions from "finding" to "live")
 
 private struct PostedConfirmation: View {
     let bounty: Bounty
@@ -216,8 +297,24 @@ private struct PostedConfirmation: View {
             Text("Hunters nearby can now see and accept your job.")
                 .multilineTextAlignment(.center)
                 .foregroundColor(.secondary)
-            Text(FeeMath.formatted(cents: bounty.totalCents))
-                .font(.title2.bold())
+
+            // Show the live offer range if surge is configured.
+            if bounty.maxPriceCents > bounty.basePriceCents {
+                HStack(spacing: 4) {
+                    Text("Offer:")
+                        .foregroundColor(.secondary)
+                    Text("\(FeeMath.formatted(cents: bounty.basePriceCents)) → \(FeeMath.formatted(cents: bounty.maxPriceCents))")
+                        .bold()
+                }
+                Text(SurgePricing.countdownLabel(surgeHours: bounty.surgeHours,
+                                                 postedAt: bounty.postedAt))
+                    .font(.caption)
+                    .foregroundColor(.accentColor)
+            } else {
+                Text(FeeMath.formatted(cents: bounty.totalCents))
+                    .font(.title2.bold())
+            }
+
             ForEach(bounty.steps) { step in
                 HStack {
                     Text(step.title)

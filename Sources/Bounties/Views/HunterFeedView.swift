@@ -67,14 +67,33 @@ struct HunterFeedView: View {
 
 private struct BountyRow: View {
     let bounty: Bounty
+    // Re-render every second so the live-rising offer ticks upward in real time.
+    @State private var now: Date = .now
+    @State private var ticker: Timer?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(bounty.description).lineLimit(2)
-            HStack {
-                Text(FeeMath.formatted(cents: bounty.totalCents))
+            HStack(spacing: 6) {
+                // displayOfferCents is computed from elapsed time + now, so
+                // ticking the local `now` state drives live re-renders.
+                let offer = SurgePricing.currentOfferCents(
+                    basePriceCents: bounty.basePriceCents,
+                    maxPriceCents: bounty.maxPriceCents,
+                    surgeHours: bounty.surgeHours,
+                    postedAt: bounty.postedAt,
+                    now: now
+                )
+                Text(FeeMath.formatted(cents: bounty.lockedPriceCents ?? offer))
                     .font(.headline)
                     .foregroundColor(.accentColor)
+                if bounty.lockedPriceCents == nil,
+                   SurgePricing.isSurging(surgeHours: bounty.surgeHours,
+                                          postedAt: bounty.postedAt, now: now) {
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                }
                 Spacer()
                 if let km = bounty.distanceKm {
                     Text(String(format: "%.1f km", km))
@@ -85,8 +104,22 @@ private struct BountyRow: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+            if bounty.lockedPriceCents == nil,
+               SurgePricing.isSurging(surgeHours: bounty.surgeHours,
+                                       postedAt: bounty.postedAt, now: now) {
+                Text(SurgePricing.countdownLabel(surgeHours: bounty.surgeHours,
+                                                 postedAt: bounty.postedAt, now: now))
+                    .font(.caption2)
+                    .foregroundColor(.orange)
+            }
         }
         .padding(.vertical, 4)
+        .onAppear {
+            ticker = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
+                now = .now
+            }
+        }
+        .onDisappear { ticker?.invalidate() }
     }
 }
 #endif

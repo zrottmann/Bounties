@@ -42,7 +42,11 @@ actor BackendMarketplaceService: MarketplaceService {
             "description": bounty.summary ?? bounty.description,
             "steps": bounty.steps.enumerated().map { i, s in
                 ["title": s.title, "amountCents": s.amountCents]
-            }
+            },
+            "basePriceCents": bounty.basePriceCents,
+            "maxPriceCents": bounty.maxPriceCents,
+            "surgeHours": bounty.surgeHours,
+            "postedAt": ISO8601DateFormatter().string(from: bounty.postedAt)
         ]
         if let p = photoB64 { body["photoBase64"] = p }
 
@@ -246,6 +250,14 @@ actor BackendMarketplaceService: MarketplaceService {
         bounty.photoReference = raw["photoUrl"] as? String
         bounty.status = mapStatus(statusStr)
         bounty.distanceKm = distKm
+
+        // Surge pricing fields from server response.
+        if let base = raw["basePriceCents"] as? Int    { bounty.basePriceCents = base }
+        if let max  = raw["maxPriceCents"] as? Int     { bounty.maxPriceCents  = max  }
+        if let sh   = raw["surgeHours"] as? Double     { bounty.surgeHours     = sh   }
+        if let pa   = raw["postedAt"] as? String       { bounty.postedAt       = parseDate(pa) }
+        if let lp   = raw["lockedPriceCents"] as? Int  { bounty.lockedPriceCents = lp }
+        if let co   = raw["currentOfferCents"] as? Int { bounty.currentOfferCents = co }
 
         // Map steps from server response or local.
         if let rawSteps = steps, !rawSteps.isEmpty {

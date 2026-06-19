@@ -267,4 +267,59 @@ final class BountiesKitTests: XCTestCase {
         XCTAssertEqual(FeeMath.formatted(cents: 1099), "$10.99")
         XCTAssertEqual(FeeMath.formatted(cents: 2500), "$25.00")
     }
+
+    // MARK: - Surge pricing interpolation
+
+    func testSurgeAtT0ReturnsBase() {
+        let base = 2000, max = 5000
+        let postedAt = Date.now
+        let offer = SurgePricing.currentOfferCents(
+            basePriceCents: base, maxPriceCents: max,
+            surgeHours: 2.0, postedAt: postedAt, now: postedAt)
+        XCTAssertEqual(offer, base, "at t=0 offer must equal base price")
+    }
+
+    func testSurgeAtOrBeyondSurgeHoursReturnsMax() {
+        let base = 2000, max = 5000
+        let postedAt = Date(timeIntervalSinceNow: -3 * 3600)  // 3h ago > 2h surgeHours
+        let offer = SurgePricing.currentOfferCents(
+            basePriceCents: base, maxPriceCents: max,
+            surgeHours: 2.0, postedAt: postedAt)
+        XCTAssertEqual(offer, max, "at t≥surgeHours offer must be clamped to max")
+    }
+
+    func testSurgeAtMidpointReturnsHalfway() {
+        let base = 2000, max = 4000
+        let surgeHours = 2.0
+        let postedAt = Date(timeIntervalSinceNow: -(surgeHours * 3600 / 2))  // exactly midpoint
+        let offer = SurgePricing.currentOfferCents(
+            basePriceCents: base, maxPriceCents: max,
+            surgeHours: surgeHours, postedAt: postedAt)
+        // Expected: 2000 + 0.5 * (4000 - 2000) = 3000
+        XCTAssertEqual(offer, 3000, accuracy: 1,
+                       "midpoint offer must be halfway between base and max")
+    }
+
+    func testSurgeClampedToMax() {
+        let base = 2000, max = 5000
+        let postedAt = Date(timeIntervalSinceNow: -100 * 3600)  // way past surgeHours
+        let offer = SurgePricing.currentOfferCents(
+            basePriceCents: base, maxPriceCents: max,
+            surgeHours: 2.0, postedAt: postedAt)
+        XCTAssertEqual(offer, max, "offer must never exceed max even far past deadline")
+    }
+
+    func testSurgeWithEqualBaseAndMaxReturnsBase() {
+        let offer = SurgePricing.currentOfferCents(
+            basePriceCents: 3000, maxPriceCents: 3000,
+            surgeHours: 2.0, postedAt: .now)
+        XCTAssertEqual(offer, 3000)
+    }
+
+    func testSurgeWithZeroHoursReturnsBase() {
+        let offer = SurgePricing.currentOfferCents(
+            basePriceCents: 2000, maxPriceCents: 5000,
+            surgeHours: 0, postedAt: .now)
+        XCTAssertEqual(offer, 2000, "zero surgeHours → always return base")
+    }
 }
