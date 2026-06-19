@@ -11,7 +11,7 @@ struct SettingsView: View {
     private let version: String = {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "3"
-        return "BountyHunter v\(v) (\(b))"
+        return "Better Call Help v\(v) (\(b))"
     }()
 
     private var roleDescription: String {
@@ -56,7 +56,7 @@ struct SettingsView: View {
 
                 Section("About") {
                     LabeledContent("Version", value: version)
-                    Text("BountyHunter — Uber for household chores. Post a job, fund it, and hunters complete it step by step with evidence photos.")
+                    Text("Better Call Help — Uber for household chores. Post a job, fund it, and helpers complete it step by step with evidence photos.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

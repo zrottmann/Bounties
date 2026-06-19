@@ -141,7 +141,7 @@ public enum MarketplaceError: LocalizedError {
     }
 
     /// User-facing message shown for any high-demand / outage condition.
-    public static let busyMessage = "BountyHunter is in high demand right now. Please try again in about 24 hours."
+    public static let busyMessage = "Better Call Help is in high demand right now. Please try again in about 24 hours."
 
     /// True when this error should show the demand banner (not a raw alert).
     public var isBusy: Bool {

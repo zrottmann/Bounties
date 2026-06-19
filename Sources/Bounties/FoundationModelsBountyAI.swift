@@ -45,7 +45,7 @@ final class FoundationModelsBountyAI: BountyAIService, Sendable {
 
     private func tier1(description: String, photoContext: String?) async -> BountyBreakdown? {
         let instructions = """
-        You are a household-chore pricing assistant for the BountyHunter app. \
+        You are a household-chore pricing assistant for the Better Call Help app. \
         When given a job description you ALWAYS respond with valid JSON and nothing else \
         (no markdown fences, no backticks, no explanation). Use this exact shape:
         {"summary":"<one sentence>","suggestedTotalCents":<integer>,"marketPriceCents":<integer>,"steps":[{"title":"<string>","amountCents":<integer>}]}

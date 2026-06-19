@@ -43,7 +43,7 @@ func presentApplePay(
     }
 
     let item = PKPaymentSummaryItem(
-        label: "BountyHunter Job",
+        label: "Better Call Help Job",
         amount: NSDecimalNumber(value: Double(amountCents) / 100.0)
     )
     let req = PKPaymentRequest()

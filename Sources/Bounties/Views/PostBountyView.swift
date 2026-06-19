@@ -22,7 +22,7 @@ struct PostBountyView: View {
                 PostedConfirmation(bounty: vm.postedBounty!)
             }
         }
-        .navigationTitle("Post a BountyHunter Job")
+        .navigationTitle("Post a Job")
         .busyBannerForError($vm.busyError) {
             // Retry: stay on reviewing phase — user taps Pay again.
         }

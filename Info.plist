@@ -5,13 +5,13 @@
     <key>CFBundleIdentifier</key>
     <string>com.zrottmann.bounties</string>
     <key>CFBundleName</key>
-    <string>BountyHunter</string>
+    <string>BetterCallHelp</string>
     <key>CFBundleDisplayName</key>
-    <string>BountyHunter</string>
+    <string>Better Call Help</string>
     <key>CFBundleShortVersionString</key>
     <string>0.1.0</string>
     <key>CFBundleVersion</key>
-    <string>6</string>
+    <string>7</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundlePackageType</key>
@@ -23,11 +23,11 @@
         <string>UIInterfaceOrientationPortrait</string>
     </array>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>BountyHunter needs access to your photos so you can attach a picture of the job and upload evidence when a step is complete.</string>
+    <string>Better Call Help needs access to your photos so you can attach a picture of the job and upload evidence when a step is complete.</string>
     <key>NSCameraUsageDescription</key>
-    <string>BountyHunter uses your camera so you can take a photo of the job or capture evidence when completing a step.</string>
+    <string>Better Call Help uses your camera so you can take a photo of the job or capture evidence when completing a step.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>BountyHunter uses your location to show nearby jobs and sort the hunter feed by distance.</string>
+    <string>Better Call Help uses your location to show nearby jobs and sort the helper feed by distance.</string>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
     <key>CFBundleIcons</key>
